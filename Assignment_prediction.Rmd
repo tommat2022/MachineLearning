@@ -1,0 +1,107 @@
+---
+title: "Practical Machine Learning: Prediction Assignment Wrapup"
+author: "Tom Mat"
+date: "2023-01-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary
+This document is the assignment of the Practical Machine Learning course. Using the several machine learning techniques, I created the prediction model and applied them to the test data. I evaluated each methods and finally I reccomend the best model I tried to. You can see my trial at the following website. https://rpubs.com/tommat2022/ML_project
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+## Data provided by the course
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Set up libraries
+```{r libraries}
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(gt))
+suppressMessages(library(rpart))
+suppressMessages(library(rattle))
+```
+
+## Uptaking the data
+I downloaded the two dataset and set them to training_pre and testing dataset.
+```{r data}
+training_pre <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+```
+
+## Cleaning training_pre dataset
+I dropped the useless variables.
+```{r Cleaning}
+# drop useless variables. First 7 variables will obviously not contribute the creation of models
+training_pre <- training_pre[,-(1:7)]
+# drop the variables which contains a lot of NA.
+LotOfNA <- sapply(training_pre, function(x) mean(is.na(x))) > 0.95
+training_pre <- training_pre[,LotOfNA==FALSE]
+# drop the variables with near zero variance
+NearZero <- nearZeroVar(training_pre)
+training_pre <- training_pre[,-NearZero]
+```
+
+## Creating the training and validation dataset
+I divided the training_pre dataset into training and validation dataset. 70 % of training_pre goes into the training dataset.
+```{r training and validation}
+set.seed(333)
+inTrain <- createDataPartition(y=training_pre$classe, p=0.7, list=FALSE)
+training <- training_pre[inTrain,]
+validation <- training_pre[-inTrain,]
+```
+
+## Building model by using rpart
+```{r glm}
+model_rpart <- rpart(classe ~ ., data=training, cp=0.01, maxdepth=10)
+fancyRpartPlot(model_rpart)
+```
+
+## Predcition by rpart
+```{r}
+predict_rpart <- predict(model_rpart, newdata=validation, type="class")
+conf_matrix_rpart <- confusionMatrix(predict_rpart, as.factor(validation$classe))
+conf_matrix_rpart
+```
+
+## Building model by using random forest
+```{r random forest}
+model_rf <- train(classe ~ ., data=training, method="rf", 
+                  trControl=trainControl(method="cv",number=3))
+```
+
+## Predicting by using random forest
+```{r}
+predict_rf <- predict(model_rf, newdata=validation)
+conf_matrix_rf <- confusionMatrix(predict_rf, as.factor(validation$classe))
+conf_matrix_rf
+```
+
+## Comparing rpart model and random forest model
+ As shown above, random forest model is much better than rpart model. The accuracy of the rpart model is 0.6948, while the accuracy of the random forest model is 0.9907.  The sensitivity of the rpart model is low at Class B, D and E.  As for positive prediction value of the rpart model is low especially at Class D. On the other hand, the random forest model is excellent at any accuracy statistics including sensitivity, specificity, positive prediction values and negative prediction values. Therefore, I chose to use the random forest model. Next I examine which factors are most important in the random forest model.
+ 
+## Important variables in the random forest model
+```{r influential variables, fig.width=20}
+print(varImp(model_rf))
+plot(varImp(model_rf))
+```
+## Predictin the classification of test data.
+```{r predict test data}
+predict_test <- predict(model_rf, newdata=testing)
+predict_test
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
